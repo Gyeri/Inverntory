@@ -13,7 +13,8 @@ import {
   ShoppingBag,
   TrendingUp,
   AlertTriangle,
-  FileText
+  FileText,
+  CreditCard
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -79,6 +80,14 @@ const Sidebar = ({ isOpen, onClose }) => {
       href: '/dashboard/admin/settings',
       icon: Settings,
       roles: ['admin']
+    },
+
+    // Shared Navigation
+    {
+      name: 'Credit Management',
+      href: user?.role === 'cashier' ? '/dashboard/cashier/credit' : '/dashboard/manager/credit',
+      icon: CreditCard,
+      roles: ['cashier', 'manager', 'admin']
     }
   ];
 

@@ -9,10 +9,36 @@ router.post('/', requireCashierOrAbove, async (req, res) => {
     const transaction = await runQuery('BEGIN TRANSACTION');
     
     try {
-        const { items, discount_amount = 0, payment_method = 'cash' } = req.body;
+        const { 
+            items, 
+            discount_amount = 0, 
+            payment_method = 'cash', 
+            customer_id, 
+            credit_due_date 
+        } = req.body;
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'Sale items are required' });
+        }
+
+        // Validate credit sale requirements
+        if (payment_method === 'credit') {
+            if (!customer_id) {
+                return res.status(400).json({ error: 'Customer is required for credit sales' });
+            }
+            if (!credit_due_date) {
+                return res.status(400).json({ error: 'Credit due date is required' });
+            }
+
+            // Check customer exists and has credit limit
+            const customer = await getQuery(
+                'SELECT * FROM customers WHERE id = ? AND is_active = 1',
+                [customer_id]
+            );
+
+            if (!customer) {
+                return res.status(400).json({ error: 'Customer not found' });
+            }
         }
 
         // Generate transaction ID
@@ -59,10 +85,33 @@ router.post('/', requireCashierOrAbove, async (req, res) => {
         // Apply discount
         total_amount = Math.max(0, total_amount - discount_amount);
 
+        // For credit sales, validate credit limit
+        if (payment_method === 'credit') {
+            const totalPaid = await getQuery(
+                'SELECT COALESCE(SUM(amount), 0) as total FROM credit_payments WHERE customer_id = ?',
+                [customer_id]
+            );
+
+            const customer = await getQuery(
+                'SELECT * FROM customers WHERE id = ?',
+                [customer_id]
+            );
+
+            const currentOutstanding = customer.outstanding_balance;
+            const newOutstanding = currentOutstanding + total_amount;
+
+            if (customer.credit_limit > 0 && newOutstanding > customer.credit_limit) {
+                return res.status(400).json({ 
+                    error: `Credit limit exceeded. Credit limit: ₦${customer.credit_limit.toFixed(2)}, Outstanding: ₦${currentOutstanding.toFixed(2)}, New purchase: ₦${total_amount.toFixed(2)}` 
+                });
+            }
+        }
+
         // Create sale record
+        const credit_amount = payment_method === 'credit' ? total_amount : 0;
         const saleResult = await runQuery(
-            'INSERT INTO sales (transaction_id, cashier_id, total_amount, discount_amount, payment_method) VALUES (?, ?, ?, ?, ?)',
-            [transaction_id, req.user.id, total_amount, discount_amount, payment_method]
+            'INSERT INTO sales (transaction_id, cashier_id, customer_id, total_amount, discount_amount, payment_method, credit_due_date, credit_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [transaction_id, req.user.id, customer_id, total_amount, discount_amount, payment_method, credit_due_date, credit_amount]
         );
 
         const sale_id = saleResult.id;
@@ -97,12 +146,21 @@ router.post('/', requireCashierOrAbove, async (req, res) => {
             );
         }
 
+        // Update customer outstanding balance for credit sales
+        if (payment_method === 'credit') {
+            await runQuery(
+                'UPDATE customers SET outstanding_balance = outstanding_balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [total_amount, customer_id]
+            );
+        }
+
         await runQuery('COMMIT');
 
         // Log sale activity
+        const paymentText = payment_method === 'credit' ? 'credit' : `₦${total_amount}`;
         await runQuery(
             'INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-            [req.user.id, 'create_sale', 'sale', sale_id, `Created sale ${transaction_id} for $${total_amount}`]
+            [req.user.id, 'create_sale', 'sale', sale_id, `Created ${payment_method} sale ${transaction_id} for ${paymentText}`]
         );
 
         res.status(201).json({

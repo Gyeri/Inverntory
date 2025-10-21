@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import CreditManagement from './components/CreditManagement';
 
 // Dashboard Pages
 import CashierDashboard from './pages/cashier/CashierDashboard';
@@ -87,6 +88,11 @@ function AppContent() {
                 <CashierDashboard />
               </ProtectedRoute>
             } />
+            <Route path="cashier/credit" element={
+              <ProtectedRoute requiredRole={['admin', 'manager', 'cashier']}>
+                <CreditManagement />
+              </ProtectedRoute>
+            } />
             
             {/* Manager Routes */}
             <Route path="manager" element={
@@ -107,6 +113,11 @@ function AppContent() {
             <Route path="manager/analytics" element={
               <ProtectedRoute requiredRole={['admin', 'manager']}>
                 <Analytics />
+              </ProtectedRoute>
+            } />
+            <Route path="manager/credit" element={
+              <ProtectedRoute requiredRole={['admin', 'manager']}>
+                <CreditManagement />
               </ProtectedRoute>
             } />
             

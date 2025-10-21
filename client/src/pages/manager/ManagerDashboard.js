@@ -32,6 +32,7 @@ const ManagerDashboard = () => {
   const [topProducts, setTopProducts] = useState([]);
   const [categorySales, setCategorySales] = useState([]);
   const [hourlyPattern, setHourlyPattern] = useState([]);
+  const [overdueAlerts, setOverdueAlerts] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -48,13 +49,15 @@ const ManagerDashboard = () => {
         trendsRes,
         productsRes,
         categoriesRes,
-        hourlyRes
+        hourlyRes,
+        overdueRes
       ] = await Promise.all([
         api.get('/analytics/dashboard'),
         api.get('/analytics/sales-trends?period=7days'),
         api.get('/analytics/top-products?period=7days&limit=5'),
         api.get('/analytics/sales-by-category?period=7days'),
-        api.get('/analytics/hourly-pattern?days=7')
+        api.get('/analytics/hourly-pattern?days=7'),
+        api.get('/customers/overdue/alerts?days=30')
       ]);
 
       setDashboardData(dashboardRes.data);
@@ -62,6 +65,7 @@ const ManagerDashboard = () => {
       setTopProducts(productsRes.data.topProducts);
       setCategorySales(categoriesRes.data.categorySales);
       setHourlyPattern(hourlyRes.data.hourlyPattern);
+      setOverdueAlerts(overdueRes.data);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       toast.error('Failed to load dashboard data');
@@ -101,6 +105,48 @@ const ManagerDashboard = () => {
           Overview of sales performance, inventory, and analytics
         </p>
       </div>
+
+      {/* Overdue Credit Alerts */}
+      {overdueAlerts && overdueAlerts.summary.overdue_count > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+            <h3 className="text-lg font-medium text-red-800">Overdue Credit Alerts</h3>
+          </div>
+          <p className="mt-2 text-sm text-red-700">
+            You have {overdueAlerts.summary.overdue_count} overdue credit(s) totaling ₦{overdueAlerts.summary.total_overdue_amount.toFixed(2)}
+          </p>
+          {overdueAlerts.recentOverdue.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-medium text-red-800 mb-2">Recent Overdue Credits:</p>
+              <div className="space-y-2">
+                {overdueAlerts.recentOverdue.slice(0, 3).map((credit) => (
+                  <div key={credit.id} className="bg-white border border-red-200 rounded p-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="font-medium">{credit.customer_name}</span>
+                        <span className="text-gray-500 ml-2">({credit.transaction_id})</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium text-red-600">₦{credit.remaining_balance.toFixed(2)}</div>
+                        <div className="text-xs text-gray-500">{Math.floor(credit.days_overdue)} days overdue</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3">
+                <a
+                  href="/dashboard/manager/credit"
+                  className="btn btn-outline btn-sm text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
+                >
+                  Manage Credit Sales
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

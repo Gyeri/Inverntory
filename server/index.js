@@ -14,12 +14,14 @@ const analyticsRoutes = require('./routes/analytics');
 const usersRoutes = require('./routes/users');
 const productsRoutes = require('./routes/products');
 const salesRoutes = require('./routes/sales');
+const customersRoutes = require('./routes/customers');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/customers', customersRoutes);
 
 // Health route
 app.get('/test', (req, res) => {

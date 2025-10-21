@@ -33,18 +33,36 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Customers table for credit sales
+CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    credit_limit REAL DEFAULT 0,
+    outstanding_balance REAL DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Sales transactions table
 CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_id TEXT UNIQUE NOT NULL,
     cashier_id INTEGER NOT NULL,
+    customer_id INTEGER,
     total_amount REAL NOT NULL,
     tax_amount REAL DEFAULT 0,
     discount_amount REAL DEFAULT 0,
     payment_method TEXT DEFAULT 'cash',
     status TEXT DEFAULT 'completed',
+    credit_due_date DATE,
+    credit_amount REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (cashier_id) REFERENCES users(id)
+    FOREIGN KEY (cashier_id) REFERENCES users(id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 
 -- Sales items table for individual products in transactions
@@ -74,6 +92,22 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (performed_by) REFERENCES users(id)
+);
+
+-- Credit payments table for tracking credit sales payments
+CREATE TABLE IF NOT EXISTS credit_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    customer_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    payment_date DATE NOT NULL,
+    payment_method TEXT DEFAULT 'cash',
+    notes TEXT,
+    recorded_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_id) REFERENCES sales(id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (recorded_by) REFERENCES users(id)
 );
 
 -- Activity logs table for monitoring all actions
