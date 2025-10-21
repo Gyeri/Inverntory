@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Plus, 
   Search, 
-  Filter, 
   Edit, 
   Trash2, 
   AlertTriangle,
   Package,
-  Eye,
-  EyeOff
+  X,
+  ScanBarcode,
+  Camera,
+  Save
 } from 'lucide-react';
 
 const InventoryManagement = () => {
+  const { isManager, isAdmin } = useAuth();
+  const scannerRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -25,6 +29,10 @@ const InventoryManagement = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [stockAlerts, setStockAlerts] = useState({ lowStock: [], outOfStock: [] });
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -68,6 +76,148 @@ const InventoryManagement = () => {
       setCategories(response.data.categories);
     } catch (error) {
       console.error('Failed to load categories:', error);
+    }
+  };
+
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+
+    try {
+      await api.post('/products/categories', {
+        name: newCategoryName.trim(),
+        description: newCategoryDescription.trim()
+      });
+      
+      toast.success('Category created successfully');
+      setShowCategoryModal(false);
+      setNewCategoryName('');
+      setNewCategoryDescription('');
+      
+      // Reload categories
+      await loadCategories();
+      
+    } catch (error) {
+      console.error('Failed to create category:', error);
+      toast.error(error.response?.data?.error || 'Failed to create category');
+    }
+  };
+
+  const startBarcodeScan = async () => {
+    try {
+      setIsScanning(true);
+      
+      // Dynamically import QuaggaJS only when needed
+      const Quagga = await import('quagga');
+      
+      // Initialize QuaggaJS scanner
+      Quagga.default.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: scannerRef.current,
+          constraints: {
+            width: 640,
+            height: 480,
+            facingMode: "environment" // Use back camera
+          },
+        },
+        decoder: {
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "code_39_reader",
+            "code_39_vin_reader",
+            "codabar_reader",
+            "upc_reader",
+            "upc_e_reader",
+            "i2of5_reader"
+          ]
+        },
+        locate: true,
+        locator: {
+          patchSize: "medium",
+          halfSample: true
+        }
+      }, (err) => {
+        if (err) {
+          console.error('Quagga initialization error:', err);
+          toast.error('Failed to initialize camera scanner');
+          setIsScanning(false);
+          return;
+        }
+        console.log("Quagga initialization finished. Ready to start");
+        Quagga.default.start();
+      });
+
+      // Listen for successful barcode detection
+      Quagga.default.onDetected((data) => {
+        const code = data.codeResult.code;
+        console.log('Barcode detected:', code);
+        
+        // Stop scanning
+        Quagga.default.stop();
+        setIsScanning(false);
+        
+        // Look up product by barcode
+        lookupProductByBarcode(code);
+      });
+
+    } catch (error) {
+      console.error('Failed to start barcode scanner:', error);
+      toast.error('Failed to access camera. Please check permissions.');
+      setIsScanning(false);
+    }
+  };
+
+  const stopBarcodeScan = async () => {
+    try {
+      const Quagga = await import('quagga');
+      if (Quagga.default) {
+        Quagga.default.stop();
+      }
+    } catch (error) {
+      console.error('Error stopping scanner:', error);
+    }
+    setIsScanning(false);
+  };
+
+  const lookupProductByBarcode = async (barcode) => {
+    try {
+      // Try to find existing product with this barcode via API
+      const response = await api.get(`/products/barcode/${barcode}`);
+      const existingProduct = response.data.product;
+      
+      if (existingProduct) {
+        // Product exists, populate form with existing data
+        setFormData({
+          name: existingProduct.name,
+          description: existingProduct.description || '',
+          sku: existingProduct.sku,
+          barcode: existingProduct.barcode,
+          price: existingProduct.price,
+          cost: existingProduct.cost || '',
+          stock_quantity: existingProduct.stock_quantity,
+          min_stock_level: existingProduct.min_stock_level,
+          category: existingProduct.category || '',
+          supplier: existingProduct.supplier || ''
+        });
+        setSelectedProduct(existingProduct);
+        setShowEditModal(true);
+        toast.success(`Found existing product: ${existingProduct.name}`);
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        // Product doesn't exist, just fill the barcode field
+        setFormData(prev => ({ ...prev, barcode: barcode }));
+        toast.success(`Barcode scanned: ${barcode}. Please fill in product details.`);
+      } else {
+        console.error('Error looking up product:', error);
+        toast.error('Error processing scanned barcode');
+      }
     }
   };
 
@@ -266,7 +416,7 @@ const InventoryManagement = () => {
             >
               <option value="">All Categories</option>
               {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+                <option key={category.id} value={category.name}>{category.name}</option>
               ))}
             </select>
 
@@ -416,13 +566,91 @@ const InventoryManagement = () => {
                       </div>
                       <div>
                         <label className="label">Barcode</label>
-                        <input
-                          type="text"
-                          name="barcode"
-                          className="input"
-                          value={formData.barcode}
-                          onChange={handleInputChange}
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            name="barcode"
+                            className="input flex-1"
+                            value={formData.barcode}
+                            onChange={handleInputChange}
+                            placeholder="Enter barcode or scan"
+                          />
+                          <button
+                            type="button"
+                            onClick={isScanning ? stopBarcodeScan : startBarcodeScan}
+                            className={`btn px-3 ${isScanning ? 'btn-error' : 'btn-outline'}`}
+                            title={isScanning ? 'Stop Scanning' : 'Scan Barcode'}
+                          >
+                            {isScanning ? <X className="h-4 w-4" /> : <ScanBarcode className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {isScanning && (
+                          <div className="mt-3">
+                            {/* Professional Scanner Container */}
+                            <div className="relative bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                              {/* Scanner Header */}
+                              <div className="bg-gray-100 px-3 py-2 border-b border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                    <span className="text-xs font-medium text-gray-700">Scanning Active</span>
+                                  </div>
+                                  <button
+                                    onClick={stopBarcodeScan}
+                                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Camera Feed */}
+                              <div 
+                                ref={scannerRef} 
+                                className="w-full h-48 bg-gray-900 relative"
+                              >
+                                {/* Camera Placeholder */}
+                                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                                  <div className="text-center text-white">
+                                    <Camera className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                                    <p className="text-xs text-gray-300">Camera Loading...</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Professional Scanning Overlay */}
+                                <div className="absolute inset-0 pointer-events-none">
+                                  {/* Scanning Frame */}
+                                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-24 border-2 border-blue-500 rounded">
+                                    {/* Corner Indicators */}
+                                    <div className="absolute -top-1 -left-1 w-4 h-4 border-l-2 border-t-2 border-blue-500 rounded-tl"></div>
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 border-r-2 border-t-2 border-blue-500 rounded-tr"></div>
+                                    <div className="absolute -bottom-1 -left-1 w-4 h-4 border-l-2 border-b-2 border-blue-500 rounded-bl"></div>
+                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 border-r-2 border-b-2 border-blue-500 rounded-br"></div>
+                                  </div>
+                                  
+                                  {/* Scanning Line */}
+                                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-blue-500 animate-pulse"></div>
+                                  
+                                  {/* Status Badge */}
+                                  <div className="absolute top-2 left-1/2 transform -translate-x-1/2">
+                                    <div className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium flex items-center space-x-1">
+                                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                      <span>Scanning</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Scanner Footer */}
+                              <div className="bg-gray-100 px-3 py-2 border-t border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-600">Position barcode within frame</span>
+                                  <span className="text-xs text-gray-500">Code 128, EAN, UPC</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -478,17 +706,27 @@ const InventoryManagement = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="label">Category</label>
-                        <select
-                          name="category"
-                          className="input"
-                          value={formData.category}
-                          onChange={handleInputChange}
-                        >
-                          <option value="">Select Category</option>
-                          {categories.map(category => (
-                            <option key={category} value={category}>{category}</option>
-                          ))}
-                        </select>
+                        <div className="flex gap-2">
+                          <select
+                            name="category"
+                            className="input flex-1"
+                            value={formData.category}
+                            onChange={handleInputChange}
+                          >
+                            <option value="">Select Category</option>
+                            {categories.map(category => (
+                              <option key={category.id} value={category.name}>{category.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowCategoryModal(true)}
+                            className="btn btn-outline px-3"
+                            title="Add New Category"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                       <div>
                         <label className="label">Supplier</label>
@@ -526,6 +764,80 @@ const InventoryManagement = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+            
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Add New Category
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowCategoryModal(false);
+                      setNewCategoryName('');
+                      setNewCategoryDescription('');
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Category Name *</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Enter category name"
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="label">Description</label>
+                    <textarea
+                      className="input"
+                      rows="3"
+                      value={newCategoryDescription}
+                      onChange={(e) => setNewCategoryDescription(e.target.value)}
+                      placeholder="Enter category description (optional)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  onClick={createCategory}
+                  className="btn btn-primary sm:ml-3"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Create Category
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setNewCategoryName('');
+                    setNewCategoryDescription('');
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
