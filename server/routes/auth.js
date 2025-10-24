@@ -14,10 +14,10 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Please provide both username and password' });
     }
 
-    // Fetch user from SQLite DB - allow login with either username or email
+    // Fetch user from SQLite DB
     const user = await getQuery(
-      'SELECT id, username, role, full_name, is_active, password_hash FROM users WHERE username = ? OR email = ? LIMIT 1',
-      [username, username]
+      'SELECT id, username, role, full_name, is_active, password_hash FROM users WHERE username = ? LIMIT 1',
+      [username]
     );
 
     if (!user || user.is_active === 0) {

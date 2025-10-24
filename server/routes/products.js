@@ -59,6 +59,28 @@ router.get('/', requireCashierOrAbove, async (req, res) => {
     }
 });
 
+// Get product by barcode
+router.get('/barcode/:barcode', requireCashierOrAbove, async (req, res) => {
+    try {
+        const { barcode } = req.params;
+        
+        const product = await getQuery(`
+            SELECT * FROM products 
+            WHERE barcode = ? AND is_active = TRUE
+        `, [barcode]);
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json({ product });
+
+    } catch (error) {
+        console.error('Get product by barcode error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Get product by ID
 router.get('/:id', requireCashierOrAbove, async (req, res) => {
     try {
@@ -309,18 +331,158 @@ router.get('/alerts/low-stock', requireManagerOrAdmin, async (req, res) => {
 router.get('/categories/list', requireCashierOrAbove, async (req, res) => {
     try {
         const categories = await allQuery(`
-            SELECT DISTINCT category 
-            FROM products 
-            WHERE category IS NOT NULL 
-            AND category != '' 
-            AND is_active = TRUE
-            ORDER BY category
+            SELECT id, name, description
+            FROM categories 
+            ORDER BY name
         `);
 
-        res.json({ categories: categories.map(c => c.category) });
+        res.json({ categories });
 
     } catch (error) {
         console.error('Get categories error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Create new category (manager and admin only)
+router.post('/categories', requireManagerOrAdmin, async (req, res) => {
+    try {
+        const { name, description } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Category name is required' });
+        }
+
+        // Check if category already exists
+        const existingCategory = await getQuery(
+            'SELECT id FROM categories WHERE name = ?',
+            [name]
+        );
+
+        if (existingCategory) {
+            return res.status(400).json({ error: 'Category already exists' });
+        }
+
+        // Create category
+        const result = await runQuery(
+            'INSERT INTO categories (name, description) VALUES (?, ?)',
+            [name, description || '']
+        );
+
+        // Log category creation
+        await runQuery(
+            'INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+            [req.user.id, 'create_category', 'category', result.id, `Created category: ${name}`]
+        );
+
+        res.status(201).json({ 
+            message: 'Category created successfully',
+            category: {
+                id: result.id,
+                name,
+                description: description || ''
+            }
+        });
+
+    } catch (error) {
+        console.error('Create category error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update category (manager and admin only)
+router.put('/categories/:id', requireManagerOrAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Category name is required' });
+        }
+
+        // Check if category exists
+        const category = await getQuery(
+            'SELECT * FROM categories WHERE id = ?',
+            [id]
+        );
+
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        // Check if new name conflicts with existing category
+        const existingCategory = await getQuery(
+            'SELECT id FROM categories WHERE name = ? AND id != ?',
+            [name, id]
+        );
+
+        if (existingCategory) {
+            return res.status(400).json({ error: 'Category name already exists' });
+        }
+
+        // Update category
+        await runQuery(
+            'UPDATE categories SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [name, description || '', id]
+        );
+
+        // Log category update
+        await runQuery(
+            'INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+            [req.user.id, 'update_category', 'category', id, `Updated category: ${name}`]
+        );
+
+        res.json({ message: 'Category updated successfully' });
+
+    } catch (error) {
+        console.error('Update category error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete category (manager and admin only)
+router.delete('/categories/:id', requireManagerOrAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if category exists
+        const category = await getQuery(
+            'SELECT * FROM categories WHERE id = ?',
+            [id]
+        );
+
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        // Check if category is being used by any products
+        const productsUsingCategory = await getQuery(
+            'SELECT COUNT(*) as count FROM products WHERE category = ?',
+            [category.name]
+        );
+
+        if (productsUsingCategory.count > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete category. It is being used by ${productsUsingCategory.count} product(s).` 
+            });
+        }
+
+        // Delete category (hard delete since no is_active column)
+        await runQuery(
+            'DELETE FROM categories WHERE id = ?',
+            [id]
+        );
+
+        // Log category deletion
+        await runQuery(
+            'INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+            [req.user.id, 'delete_category', 'category', id, `Deleted category: ${category.name}`]
+        );
+
+        res.json({ message: 'Category deleted successfully' });
+
+    } catch (error) {
+        console.error('Delete category error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

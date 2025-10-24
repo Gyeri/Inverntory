@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
 import { 
@@ -13,7 +13,11 @@ import {
   TrendingUp,
   Clock,
   Barcode,
-  X
+  X,
+  Camera,
+  Scan,
+  ShoppingBag,
+  Edit3
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -166,13 +170,31 @@ const CustomerCreationModal = ({ onClose, onCreate }) => {
 };
 
 const CashierDashboard = () => {
+  const scannerRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [cart, setCart] = useState([]);
+  
+  // Multiple Cart Management
+  const [carts, setCarts] = useState([
+    {
+      id: 1,
+      name: 'Cart 1',
+      items: [],
+      customer: null,
+      createdAt: new Date()
+    }
+  ]);
+  const [activeCartId, setActiveCartId] = useState(1);
+  
+  // Get current active cart
+  const activeCart = carts.find(cart => cart.id === activeCartId) || carts[0];
+  const cart = activeCart.items;
+  
   const [loading, setLoading] = useState(false);
   const [todayStats, setTodayStats] = useState(null);
   const [recentSales, setRecentSales] = useState([]);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -240,6 +262,7 @@ const CashierDashboard = () => {
     searchProducts(query);
   };
 
+  // Cart Management Functions
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.product_id === product.id);
     
@@ -248,7 +271,7 @@ const CashierDashboard = () => {
         toast.error('Not enough stock available');
         return;
       }
-      setCart(cart.map(item => 
+      updateCartItems(cart.map(item => 
         item.product_id === product.id 
           ? { ...item, quantity: item.quantity + 1 }
           : item
@@ -258,7 +281,7 @@ const CashierDashboard = () => {
         toast.error('Product is out of stock');
         return;
       }
-      setCart([...cart, {
+      updateCartItems([...cart, {
         product_id: product.id,
         name: product.name,
         price: product.price,
@@ -266,6 +289,14 @@ const CashierDashboard = () => {
         stock_quantity: product.stock_quantity
       }]);
     }
+  };
+
+  const updateCartItems = (newItems) => {
+    setCarts(carts.map(c => 
+      c.id === activeCartId 
+        ? { ...c, items: newItems }
+        : c
+    ));
   };
 
   const updateQuantity = (productId, newQuantity) => {
@@ -280,7 +311,7 @@ const CashierDashboard = () => {
       return;
     }
 
-    setCart(cart.map(item => 
+    updateCartItems(cart.map(item => 
       item.product_id === productId 
         ? { ...item, quantity: newQuantity }
         : item
@@ -288,7 +319,74 @@ const CashierDashboard = () => {
   };
 
   const removeFromCart = (productId) => {
-    setCart(cart.filter(item => item.product_id !== productId));
+    updateCartItems(cart.filter(item => item.product_id !== productId));
+  };
+
+  // Multiple Cart Management Functions
+  const createNewCart = () => {
+    const newCartId = Math.max(...carts.map(c => c.id)) + 1;
+    const newCart = {
+      id: newCartId,
+      name: `Cart ${newCartId}`,
+      items: [],
+      customer: null,
+      createdAt: new Date()
+    };
+    setCarts([...carts, newCart]);
+    setActiveCartId(newCartId);
+    toast.success(`Created ${newCart.name}`);
+  };
+
+  const switchCart = (cartId) => {
+    setActiveCartId(cartId);
+    const cartName = carts.find(c => c.id === cartId)?.name || 'Cart';
+    toast.success(`Switched to ${cartName}`);
+  };
+
+  const deleteCart = (cartId) => {
+    if (carts.length <= 1) {
+      toast.error('Cannot delete the last cart');
+      return;
+    }
+    
+    const cartToDelete = carts.find(c => c.id === cartId);
+    if (cartToDelete.items.length > 0) {
+      toast.error('Cannot delete cart with items. Please clear cart first.');
+      return;
+    }
+    
+    setCarts(carts.filter(c => c.id !== cartId));
+    
+    // Switch to another cart if deleting active cart
+    if (cartId === activeCartId) {
+      const remainingCarts = carts.filter(c => c.id !== cartId);
+      setActiveCartId(remainingCarts[0].id);
+    }
+    
+    toast.success(`Deleted ${cartToDelete.name}`);
+  };
+
+  const renameCart = (cartId, newName) => {
+    if (!newName.trim()) {
+      toast.error('Cart name cannot be empty');
+      return;
+    }
+    
+    setCarts(carts.map(c => 
+      c.id === cartId 
+        ? { ...c, name: newName.trim() }
+        : c
+    ));
+    toast.success(`Renamed to ${newName.trim()}`);
+  };
+
+  const assignCustomerToCart = (customer) => {
+    setCarts(carts.map(c => 
+      c.id === activeCartId 
+        ? { ...c, customer }
+        : c
+    ));
+    toast.success(`Assigned ${customer.name} to ${activeCart.name}`);
   };
 
   const getCartTotal = () => {
@@ -321,7 +419,9 @@ const CashierDashboard = () => {
 
       const saleData = {
         items,
-        payment_method: paymentMethod
+        payment_method: paymentMethod,
+        cart_id: activeCartId,
+        cart_name: activeCart.name
       };
 
       if (paymentMethod === 'credit') {
@@ -335,7 +435,7 @@ const CashierDashboard = () => {
       toast.success(`${paymentText.charAt(0).toUpperCase() + paymentText.slice(1)} completed successfully!`);
       
       // Reset form
-      setCart([]);
+      updateCartItems([]);
       setSearchQuery('');
       setProducts([]);
       setPaymentMethod('cash');
@@ -354,12 +454,106 @@ const CashierDashboard = () => {
     }
   };
 
-  const handleBarcodeScan = () => {
+  const handleBarcodeScan = async () => {
     setShowBarcodeScanner(true);
+    setIsScanning(true);
+    
+    try {
+      // Dynamically import QuaggaJS only when needed
+      const Quagga = await import('quagga');
+      
+      // Initialize QuaggaJS scanner
+      Quagga.default.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: scannerRef.current,
+          constraints: {
+            width: 400,
+            height: 300,
+            facingMode: "environment" // Use back camera
+          },
+        },
+        decoder: {
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "code_39_reader",
+            "upc_reader",
+            "upc_e_reader"
+          ]
+        },
+        locate: true,
+        locator: {
+          patchSize: "medium",
+          halfSample: true
+        }
+      }, (err) => {
+        if (err) {
+          console.error('Quagga initialization error:', err);
+          toast.error('Failed to initialize camera scanner');
+          setIsScanning(false);
+          return;
+        }
+        console.log("Quagga initialization finished. Ready to start");
+        Quagga.default.start();
+      });
+
+      // Listen for successful barcode detection
+      Quagga.default.onDetected((data) => {
+        const code = data.codeResult.code;
+        console.log('Barcode detected:', code);
+        
+        // Stop scanning
+        Quagga.default.stop();
+        setIsScanning(false);
+        
+        // Look up product by barcode
+        lookupProductByBarcode(code);
+      });
+
+    } catch (error) {
+      console.error('Failed to start barcode scanner:', error);
+      toast.error('Failed to access camera. Please check permissions.');
+      setIsScanning(false);
+    }
   };
 
-  const closeBarcodeScanner = () => {
+  const lookupProductByBarcode = async (barcode) => {
+    try {
+      // Try to find existing product with this barcode via API
+      const response = await api.get(`/products/barcode/${barcode}`);
+      const existingProduct = response.data.product;
+      
+      if (existingProduct) {
+        // Product exists, add to cart
+        addToCart(existingProduct);
+        toast.success(`Found product: ${existingProduct.name}`);
+        closeBarcodeScanner();
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        // Product doesn't exist
+        toast.error(`Product with barcode ${barcode} not found`);
+      } else {
+        console.error('Error looking up product:', error);
+        toast.error('Error processing scanned barcode');
+      }
+    }
+  };
+
+  const closeBarcodeScanner = async () => {
+    try {
+      const Quagga = await import('quagga');
+      if (Quagga.default) {
+        Quagga.default.stop();
+      }
+    } catch (error) {
+      console.error('Error stopping scanner:', error);
+    }
     setShowBarcodeScanner(false);
+    setIsScanning(false);
   };
 
   const searchCustomers = async (query) => {
@@ -388,6 +582,7 @@ const CashierDashboard = () => {
     setCustomerSearch(customer.name);
     setCustomers([]);
     setShowCustomerModal(false);
+    assignCustomerToCart(customer);
   };
 
   const clearCustomer = () => {
@@ -403,6 +598,7 @@ const CashierDashboard = () => {
       setSelectedCustomer(newCustomer);
       setCustomerSearch(newCustomer.name);
       setShowCustomerModal(false);
+      assignCustomerToCart(newCustomer);
       toast.success('Customer created successfully');
     } catch (error) {
       console.error('Failed to create customer:', error);
@@ -541,6 +737,95 @@ const CashierDashboard = () => {
                   <div className="spinner mx-auto"></div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Cart Management */}
+          <div className="card mb-4">
+            <div className="card-header">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                <ShoppingBag className="h-5 w-5 mr-2" />
+                Cart Management
+              </h3>
+            </div>
+            <div className="card-body">
+              {/* Active Cart Info */}
+              <div className="flex items-center justify-between mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <ShoppingCart className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">{activeCart.name}</h4>
+                    <p className="text-sm text-gray-500">
+                      {cart.length} items • ₦{getCartTotal().toFixed(2)}
+                      {activeCart.customer && (
+                        <span className="ml-2 text-blue-600">
+                          • Customer: {activeCart.customer.name}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={createNewCart}
+                  className="btn btn-primary btn-sm flex items-center space-x-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>New Cart</span>
+                </button>
+              </div>
+
+              {/* Cart Tabs */}
+              <div className="flex space-x-2 overflow-x-auto">
+                {carts.map((cartItem) => (
+                  <div
+                    key={cartItem.id}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors min-w-0 ${
+                      cartItem.id === activeCartId
+                        ? 'bg-blue-100 border-blue-300 text-blue-700'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                    onClick={() => switchCart(cartItem.id)}
+                  >
+                    <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm truncate">{cartItem.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {cartItem.items.length} items
+                        {cartItem.customer && ` • ${cartItem.customer.name}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newName = prompt('Enter new cart name:', cartItem.name);
+                          if (newName) renameCart(cartItem.id, newName);
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-600"
+                        title="Rename Cart"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                      {carts.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete ${cartItem.name}?`)) {
+                              deleteCart(cartItem.id);
+                            }
+                          }}
+                          className="p-1 text-red-400 hover:text-red-600"
+                          title="Delete Cart"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -808,39 +1093,128 @@ const CashierDashboard = () => {
         </div>
       </div>
 
-      {/* Barcode Scanner Modal */}
+      {/* Barcode Scanner Modal - Professional Design */}
       {showBarcodeScanner && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={closeBarcodeScanner}></div>
+            {/* Professional Background */}
+            <div 
+              className="fixed inset-0 bg-gray-900/95 backdrop-blur-sm transition-opacity" 
+              onClick={closeBarcodeScanner}
+            ></div>
             
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Barcode Scanner</h3>
-                  <button
-                    onClick={closeBarcodeScanner}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="text-center">
-                    <Barcode className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-                    <p className="text-sm text-gray-600 mb-4">
-                      Position the barcode in front of the camera to scan
-                    </p>
+            {/* Scanner Container */}
+            <div className="inline-block align-bottom text-left overflow-hidden transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+              <div className="relative">
+                {/* Professional Scanner Frame */}
+                <div className="relative bg-white rounded-xl overflow-hidden shadow-2xl border border-gray-200">
+                  {/* Header */}
+                  <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Scan className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Barcode Scanner</h3>
+                          <p className="text-sm text-gray-500">
+                            {isScanning ? 'Scanning in progress...' : 'Ready to scan products'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={closeBarcodeScanner}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
                   
-                  <div className="flex justify-center">
-                    <button
-                      onClick={closeBarcodeScanner}
-                      className="btn btn-secondary"
+                  {/* Camera View Container */}
+                  <div className="relative bg-gray-100">
+                    {/* Camera Feed */}
+                    <div 
+                      ref={scannerRef} 
+                      className={`w-full h-80 bg-gray-900 transition-all duration-500 ${
+                        isScanning 
+                          ? 'opacity-100' 
+                          : 'opacity-0'
+                      }`}
                     >
-                      Cancel
-                    </button>
+                      {/* Camera Placeholder */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                        <div className="text-center text-white">
+                          <Camera className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-sm text-gray-300">Camera Loading...</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Professional Scanning Overlay */}
+                    {isScanning && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        {/* Scanning Frame */}
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-32 border-2 border-blue-500 rounded-lg">
+                          {/* Corner Indicators */}
+                          <div className="absolute -top-1 -left-1 w-6 h-6 border-l-2 border-t-2 border-blue-500 rounded-tl-lg"></div>
+                          <div className="absolute -top-1 -right-1 w-6 h-6 border-r-2 border-t-2 border-blue-500 rounded-tr-lg"></div>
+                          <div className="absolute -bottom-1 -left-1 w-6 h-6 border-l-2 border-b-2 border-blue-500 rounded-bl-lg"></div>
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 border-r-2 border-b-2 border-blue-500 rounded-br-lg"></div>
+                        </div>
+                        
+                        {/* Scanning Line */}
+                        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-blue-500 animate-pulse"></div>
+                        
+                        {/* Status Badge */}
+                        <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
+                          <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                            <span>Scanning</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Professional Ready State */}
+                    {!isScanning && (
+                      <div className="absolute inset-0 bg-gray-50 flex items-center justify-center">
+                        <div className="text-center">
+                          {/* Professional Scan Icon */}
+                          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Scan className="h-8 w-8 text-blue-600" />
+                          </div>
+                          
+                          <h4 className="text-lg font-semibold text-gray-900 mb-2">Ready to Scan</h4>
+                          <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+                            Position the barcode within the camera view to automatically detect and add products to your cart
+                          </p>
+                          
+                          {/* Professional Start Button */}
+                          <button
+                            onClick={handleBarcodeScan}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 mx-auto"
+                          >
+                            <Camera className="h-4 w-4" />
+                            <span>Start Scanning</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Professional Footer */}
+                  <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <div className={`w-2 h-2 rounded-full ${isScanning ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                        <span>{isScanning ? 'Camera Active' : 'Camera Ready'}</span>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        Supports: Code 128, EAN, UPC, Code 39
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

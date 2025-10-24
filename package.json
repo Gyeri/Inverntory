@@ -9,19 +9,10 @@
     "client": "cd client && npm start",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": [
-    "inventory",
-    "management",
-    "react",
-    "nodejs",
-    "dashboard"
-  ],
+  "keywords": ["inventory", "management", "react", "nodejs", "dashboard"],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "react-icons": "^5.5.0"
   }
 }

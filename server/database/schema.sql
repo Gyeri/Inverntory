@@ -15,6 +15,16 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- Categories table for product categorization
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Products table for inventory items
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,5 +158,3 @@ INSERT OR IGNORE INTO products (name, description, sku, barcode, price, cost, st
 ('Cotton T-Shirt', 'Comfortable cotton t-shirt', 'TSH001', '1234567890125', 19.99, 9.99, 100, 'Clothing'),
 ('Coffee Beans', 'Premium roasted coffee beans', 'COF001', '1234567890126', 12.99, 6.99, 30, 'Food & Beverage'),
 ('Programming Book', 'Learn React development', 'BOK001', '1234567890127', 39.99, 19.99, 15, 'Books');
-
-
