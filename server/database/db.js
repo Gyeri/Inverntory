@@ -44,23 +44,53 @@ function initializeDatabase() {
             });
         });
 
-        // Seed default admin user if no users exist (runs after schema statements)
+        // Seed default users if no users exist (runs after schema statements)
         db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
             if (err) {
                 console.error('Failed to count users:', err.message);
                 return;
             }
             if (row && row.count === 0) {
-                const passwordHash = bcrypt.hashSync('admin123', 10);
                 const now = new Date().toISOString();
+                
+                // Create admin user
+                const adminPasswordHash = bcrypt.hashSync('admin123', 10);
                 db.run(
                     'INSERT INTO users (username, email, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    ['admin', 'admin@example.com', passwordHash, 'System Administrator', 'admin', 1, now, now],
+                    ['admin', 'admin@example.com', adminPasswordHash, 'System Administrator', 'admin', 1, now, now],
                     (insertErr) => {
                         if (insertErr) {
                             console.error('Failed to seed admin user:', insertErr.message);
                         } else {
                             console.log('Seeded default admin user (username: admin, password: admin123)');
+                            
+                            // Create manager user
+                            const managerPasswordHash = bcrypt.hashSync('manager123', 10);
+                            db.run(
+                                'INSERT INTO users (username, email, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                ['manager', 'manager@example.com', managerPasswordHash, 'Store Manager', 'manager', 1, now, now],
+                                (managerErr) => {
+                                    if (managerErr) {
+                                        console.error('Failed to seed manager user:', managerErr.message);
+                                    } else {
+                                        console.log('Seeded default manager user (username: manager, password: manager123)');
+                                        
+                                        // Create cashier user
+                                        const cashierPasswordHash = bcrypt.hashSync('cashier123', 10);
+                                        db.run(
+                                            'INSERT INTO users (username, email, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                            ['cashier', 'cashier@example.com', cashierPasswordHash, 'Store Cashier', 'cashier', 1, now, now],
+                                            (cashierErr) => {
+                                                if (cashierErr) {
+                                                    console.error('Failed to seed cashier user:', cashierErr.message);
+                                                } else {
+                                                    console.log('Seeded default cashier user (username: cashier, password: cashier123)');
+                                                }
+                                            }
+                                        );
+                                    }
+                                }
+                            );
                         }
                     }
                 );

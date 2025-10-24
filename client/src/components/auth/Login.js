@@ -38,8 +38,10 @@ const Login = () => {
 
       toast.success('Login successful!');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
-      toast.error('Login failed. Please try again.');
+      console.error('Login error:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Login failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -143,9 +145,9 @@ const Login = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <h3 className="text-sm font-medium text-blue-800 mb-2">Demo Credentials:</h3>
             <div className="text-xs text-blue-700 space-y-1">
-              <div><strong>Admin:</strong> admin / admin123</div>
-              <div><strong>Manager:</strong> manager / manager123</div>
-              <div><strong>Cashier:</strong> cashier / cashier123</div>
+              <div><strong>Admin:</strong> DanAlhaji / admin123</div>
+              <div><strong>Manager:</strong> Assalafi / manager123</div>
+              <div><strong>Cashier:</strong> Gyeri / cashier123</div>
             </div>
           </div>
         </form>
