@@ -44,6 +44,7 @@ const InventoryManagement = () => {
     stock_quantity: '',
     min_stock_level: '10',
     category: '',
+    categoryId: '',
     supplier: ''
   });
 
@@ -55,7 +56,7 @@ const InventoryManagement = () => {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchQuery, categoryFilter, stockFilter]);
+  }, [products, searchQuery, categoryFilter, stockFilter, categories]);
 
   const loadProducts = async () => {
     try {
@@ -77,10 +78,12 @@ const InventoryManagement = () => {
         barcode: p.barcode || p.bar_code || '',
         price: Number(p.price ?? p.unit_price ?? 0),
         cost: Number(p.cost ?? p.purchase_price ?? p.cost_price ?? 0),
-        stock_quantity: Number(p.stock_quantity ?? p.quantity ?? p.stock ?? 0),
-        min_stock_level: Number(p.min_stock_level ?? p.minStock ?? 0),
+        stock_quantity: Number(p.stock_quantity ?? p.quantity ?? p.stock ?? (p.stockQuantity ?? 0)),
+        min_stock_level: Number(p.min_stock_level ?? p.minStock ?? (p.minStockLevel ?? 0)),
         category: (typeof p.category === 'object' ? p.category?.name : p.category) || '',
-        supplier: (typeof p.supplier === 'object' ? p.supplier?.name : p.supplier) || ''
+        categoryId: p.categoryId || p.category_id || '',
+        supplier: (typeof p.supplier === 'object' ? p.supplier?.name : p.supplier) || '',
+        supplierId: p.supplierId || p.supplier_id || ''
       }));
   
       setProducts(normalized);
@@ -94,11 +97,28 @@ const InventoryManagement = () => {
 
   const loadCategories = async () => {
     try {
-      const response = await api.get('/products/categories/list');
-      setCategories(response.data.categories);
+      const response = await api.get('/categories');
+      const raw = response?.data;
+      const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+      const normalized = list.map((c) => ({
+        id: c.id || c._id || c.category_id || c.id,
+        name: c.name || c.category_name || '',
+        description: c.description || '',
+      }));
+      setCategories(normalized);
     } catch (error) {
       console.error('Failed to load categories:', error);
+      setCategories([]);
     }
+  };
+
+  const getCategoryName = (product) => {
+    if (typeof product.category === 'string' && product.category.trim()) return product.category;
+    if (product.categoryId) {
+      const found = categories.find((c) => c.id === product.categoryId);
+      if (found?.name) return found.name;
+    }
+    return '';
   };
 
   const createCategory = async () => {
@@ -108,22 +128,46 @@ const InventoryManagement = () => {
     }
 
     try {
-      await api.post('/products/categories', {
+      await api.post('/categories', {
         name: newCategoryName.trim(),
         description: newCategoryDescription.trim()
       });
-      
       toast.success('Category created successfully');
       setShowCategoryModal(false);
       setNewCategoryName('');
       setNewCategoryDescription('');
-      
       // Reload categories
       await loadCategories();
-      
+      // Update category names on products if needed
+      setProducts((prev) => prev.map((p) => ({
+        ...p,
+        category: getCategoryName(p)
+      })));
     } catch (error) {
       console.error('Failed to create category:', error);
       toast.error(error.response?.data?.error || 'Failed to create category');
+    }
+  };
+
+  const deleteCategory = async (id) => {
+    if (!id) return;
+    const category = categories.find((c) => c.id === id);
+    if (!window.confirm(`Delete category '${category?.name || id}'?`)) return;
+    try {
+      await api.delete(`/categories/${id}`);
+      toast.success('Category deleted');
+      await loadCategories();
+      // Clear category name from products using this id
+      setProducts((prev) => prev.map((p) => (p.categoryId === id ? { ...p, category: '' } : p)));
+    } catch (error) {
+      const msg = Array.isArray(error.response?.data?.message)
+        ? error.response.data.message.join('; ')
+        : (error.response?.data?.error || error.message || 'Failed to delete category');
+      if (error.response?.status === 403) {
+        toast.error('Only admin can delete categories');
+      } else {
+        toast.error(msg);
+      }
     }
   };
 
@@ -267,7 +311,7 @@ const InventoryManagement = () => {
 
     // Category filter
     if (categoryFilter) {
-      filtered = filtered.filter(product => product.category === categoryFilter);
+      filtered = filtered.filter(product => getCategoryName(product) === categoryFilter);
     }
 
     // Stock filter
@@ -296,14 +340,47 @@ const InventoryManagement = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      
+
+      const payload = {
+        name: (formData.name || '').trim(),
+        sku: (formData.sku || '').trim(),
+        price: Number(formData.price),
+        stockQuantity: Number(formData.stock_quantity),
+      };
+      if (formData.barcode && formData.barcode.trim()) payload.barcode = formData.barcode.trim();
+      if (formData.description && formData.description.trim()) payload.description = formData.description.trim();
+      if (formData.min_stock_level !== '' && formData.min_stock_level !== null && formData.min_stock_level !== undefined) {
+        payload.minStockLevel = Number(formData.min_stock_level);
+      }
+      if (formData.categoryId) payload.categoryId = formData.categoryId;
+
+      if (!payload.name || !payload.sku) {
+        toast.error('Name and SKU are required');
+        setLoading(false);
+        return;
+      }
+      if (Number.isNaN(payload.price) || payload.price <= 0) {
+        toast.error('Price must be a positive number');
+        setLoading(false);
+        return;
+      }
+      if (Number.isNaN(payload.stockQuantity) || payload.stockQuantity < 0) {
+        toast.error('Stock quantity must be a non-negative number');
+        setLoading(false);
+        return;
+      }
+      if (payload.minStockLevel !== undefined && (Number.isNaN(payload.minStockLevel) || payload.minStockLevel < 0)) {
+        toast.error('Min stock level must be a non-negative number');
+        setLoading(false);
+        return;
+      }
       if (selectedProduct) {
-        // Update product
-        await api.put(`/products/${selectedProduct.id}`, formData);
+        // Update product (Nest uses PATCH)
+        await api.patch(`/products/${selectedProduct.id}`, payload);
         toast.success('Product updated successfully');
       } else {
         // Create product
-        await api.post('/products', formData);
+        await api.post('/products', payload);
         toast.success('Product created successfully');
       }
 
@@ -315,7 +392,10 @@ const InventoryManagement = () => {
       loadStockAlerts();
     } catch (error) {
       console.error('Failed to save product:', error);
-      toast.error(error.response?.data?.error || 'Failed to save product');
+      const msg = Array.isArray(error.response?.data?.message)
+        ? error.response.data.message.join('; ')
+        : (error.response?.data?.error || error.message || 'Failed to save product');
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -333,6 +413,7 @@ const InventoryManagement = () => {
       stock_quantity: product.stock_quantity,
       min_stock_level: product.min_stock_level,
       category: product.category || '',
+      categoryId: product.categoryId || '',
       supplier: product.supplier || ''
     });
     setShowEditModal(true);
@@ -368,6 +449,7 @@ const InventoryManagement = () => {
       stock_quantity: '',
       min_stock_level: '10',
       category: '',
+      categoryId: '',
       supplier: ''
     });
   };
@@ -490,7 +572,7 @@ const InventoryManagement = () => {
                       </div>
                     </td>
                     <td className="table-cell">{product.sku}</td>
-                    <td className="table-cell">{product.category || 'Uncategorized'}</td>
+                    <td className="table-cell">{getCategoryName(product) || 'Uncategorized'}</td>
                     <td className="table-cell">${product.price.toFixed(2)}</td>
                     <td className="table-cell">
                       <div>
@@ -731,14 +813,14 @@ const InventoryManagement = () => {
                         <label className="label">Category</label>
                         <div className="flex gap-2">
                           <select
-                            name="category"
+                            name="categoryId"
                             className="input flex-1"
-                            value={formData.category}
+                            value={formData.categoryId}
                             onChange={handleInputChange}
                           >
                             <option value="">Select Category</option>
                             {categories.map(category => (
-                              <option key={category.id} value={category.name}>{category.name}</option>
+                              <option key={category.id} value={category.id}>{category.name}</option>
                             ))}
                           </select>
                           <button
@@ -838,6 +920,34 @@ const InventoryManagement = () => {
                       onChange={(e) => setNewCategoryDescription(e.target.value)}
                       placeholder="Enter category description (optional)"
                     />
+                  </div>
+
+                  {/* Existing Categories */}
+                  <div>
+                    <label className="label">Existing Categories</label>
+                    <div className="max-h-40 overflow-y-auto border rounded">
+                      {categories.length === 0 ? (
+                        <div className="p-3 text-sm text-gray-500">No categories</div>
+                      ) : (
+                        categories.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between p-2 border-b last:border-b-0">
+                            <div>
+                              <div className="text-sm font-medium">{c.name}</div>
+                              {c.description && (
+                                <div className="text-xs text-gray-500">{c.description}</div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => deleteCategory(c.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
