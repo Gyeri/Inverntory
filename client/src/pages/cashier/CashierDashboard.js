@@ -204,6 +204,17 @@ const CashierDashboard = () => {
   const [overdueCount, setOverdueCount] = useState(0);
   const [totalOutstanding, setTotalOutstanding] = useState(0);
 
+  // Normalize product shape from backend
+  const normalizeProduct = (p) => ({
+    id: p?.id || p?._id,
+    name: p?.name,
+    price: p?.price,
+    stock_quantity: p?.stock_quantity,
+    sku: p?.sku,
+    barcode: p?.barcode,
+    min_stock_level: p?.min_stock_level,
+  });
+
   useEffect(() => {
     loadTodayStats();
     loadRecentSales();
@@ -247,7 +258,8 @@ const CashierDashboard = () => {
     try {
       setLoading(true);
       const response = await api.get(`/products?search=${encodeURIComponent(query)}&limit=10`);
-      setProducts(response.data.products);
+      const list = Array.isArray(response.data?.data) ? response.data.data : (response.data?.products || []);
+      setProducts(list.map(normalizeProduct));
     } catch (error) {
       console.error('Search failed:', error);
       toast.error('Failed to search products');
@@ -412,22 +424,14 @@ const CashierDashboard = () => {
 
     try {
       setLoading(true);
-      const items = cart.map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity
+      const productsSold = cart.map(item => ({
+        productId: item.product_id,
+        productName: item.name,
+        unitPrice: item.price,
+        quantity: item.quantity,
       }));
 
-      const saleData = {
-        items,
-        payment_method: paymentMethod,
-        cart_id: activeCartId,
-        cart_name: activeCart.name
-      };
-
-      if (paymentMethod === 'credit') {
-        saleData.customer_id = selectedCustomer.id;
-        saleData.credit_due_date = creditDueDate;
-      }
+      const saleData = { productsSold };
 
       const response = await api.post('/sales', saleData);
 
@@ -528,7 +532,7 @@ const CashierDashboard = () => {
       
       if (existingProduct) {
         // Product exists, add to cart
-        addToCart(existingProduct);
+        addToCart(normalizeProduct(existingProduct));
         toast.success(`Found product: ${existingProduct.name}`);
         closeBarcodeScanner();
       }
@@ -593,8 +597,20 @@ const CashierDashboard = () => {
 
   const createNewCustomer = async (customerData) => {
     try {
-      const response = await api.post('/customers', customerData);
-      const newCustomer = response.data.customer;
+      const payload = {
+        name: customerData.name?.trim(),
+        phone: (customerData.phone || '').trim() || undefined,
+        email: (customerData.email || '').trim() || undefined,
+        address: (customerData.address || '').trim() || undefined,
+        creditLimit: Number(customerData.credit_limit ?? 0),
+      };
+      // Remove empty optional fields so backend optional validators don't run on empty strings
+      if (!payload.email) delete payload.email;
+      if (!payload.phone) delete payload.phone;
+      if (!payload.address) delete payload.address;
+  
+      const response = await api.post('/customers', payload);
+      const newCustomer = response.data; // backend returns the saved customer object directly
       setSelectedCustomer(newCustomer);
       setCustomerSearch(newCustomer.name);
       setShowCustomerModal(false);
@@ -602,7 +618,10 @@ const CashierDashboard = () => {
       toast.success('Customer created successfully');
     } catch (error) {
       console.error('Failed to create customer:', error);
-      toast.error(error.response?.data?.error || 'Failed to create customer');
+      const msg = Array.isArray(error.response?.data?.message)
+        ? error.response.data.message.join(', ')
+        : (error.response?.data?.error || 'Failed to create customer');
+      toast.error(msg);
     }
   };
 

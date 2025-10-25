@@ -8,7 +8,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -65,23 +65,23 @@ const Login = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <div className="error-message">{error}</div>}
           <div className="space-y-4">
-            {/* Username Field */}
+            {/* Email Field */}
             <div>
-              <label htmlFor="username" className="label">
-                Username or Email
+              <label htmlFor="email" className="label">
+                Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="username"
-                  name="username"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
                   required
                   className="input pl-10"
-                  placeholder="Enter your username or email"
-                  value={formData.username}
+                  placeholder="Enter your email"
+                  value={formData.email}
                   onChange={handleChange}
                 />
               </div>
@@ -143,9 +143,9 @@ const Login = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <h3 className="text-sm font-medium text-blue-800 mb-2">Demo Credentials:</h3>
             <div className="text-xs text-blue-700 space-y-1">
-              <div><strong>Admin:</strong> admin / admin123</div>
-              <div><strong>Manager:</strong> manager / manager123</div>
-              <div><strong>Cashier:</strong> cashier / cashier123</div>
+              <div><strong>Admin:</strong> admin@supermarket.com / admin123</div>
+              <div><strong>Manager:</strong> manager@supermarket.com / manager123</div>
+              <div><strong>Cashier:</strong> cashier@supermarket.com / cashier123</div>
             </div>
           </div>
         </form>

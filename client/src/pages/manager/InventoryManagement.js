@@ -61,7 +61,29 @@ const InventoryManagement = () => {
     try {
       setLoading(true);
       const response = await api.get('/products?limit=100');
-      setProducts(response.data.products);
+      const raw = Array.isArray(response.data?.data)
+        ? response.data.data
+        : Array.isArray(response.data?.products)
+        ? response.data.products
+        : Array.isArray(response.data)
+        ? response.data
+        : [];
+  
+      const normalized = raw.map((p) => ({
+        id: p.id || p._id || p.product_id || p.id,
+        name: p.name || p.product_name || '',
+        description: p.description || '',
+        sku: p.sku || p.code || '',
+        barcode: p.barcode || p.bar_code || '',
+        price: Number(p.price ?? p.unit_price ?? 0),
+        cost: Number(p.cost ?? p.purchase_price ?? p.cost_price ?? 0),
+        stock_quantity: Number(p.stock_quantity ?? p.quantity ?? p.stock ?? 0),
+        min_stock_level: Number(p.min_stock_level ?? p.minStock ?? 0),
+        category: (typeof p.category === 'object' ? p.category?.name : p.category) || '',
+        supplier: (typeof p.supplier === 'object' ? p.supplier?.name : p.supplier) || ''
+      }));
+  
+      setProducts(normalized);
     } catch (error) {
       console.error('Failed to load products:', error);
       toast.error('Failed to load products');
@@ -231,7 +253,8 @@ const InventoryManagement = () => {
   };
 
   const filterProducts = () => {
-    let filtered = [...products];
+    const source = Array.isArray(products) ? products : [];
+    let filtered = [...source];
 
     // Search filter
     if (searchQuery) {
