@@ -53,6 +53,17 @@ const CreditManagement = () => {
   const canRecordPayments = isAdmin() || isManager() || isCashier();
   const canExportData = isAdmin() || isManager();
 
+  // Normalize customer shape from backend
+  const normalizeCustomer = (c) => ({
+    id: c?.id || c?._id,
+    name: c?.name,
+    email: c?.email || '',
+    phone: c?.phone || '',
+    credit_limit: c?.credit_limit || 0,
+    outstanding_balance: c?.outstanding_balance ?? c?.outstanding ?? 0,
+    created_at: c?.created_at || c?.createdAt,
+  });
+
   useEffect(() => {
     loadData();
   }, []);
@@ -70,7 +81,8 @@ const CreditManagement = () => {
     try {
       setLoading(true);
       const response = await api.get('/customers');
-      setCustomers(response.data.customers);
+      const list = Array.isArray(response.data?.data) ? response.data.data : (response.data?.customers || []);
+      setCustomers(list.map(normalizeCustomer));
     } catch (error) {
       console.error('Failed to load customers:', error);
       toast.error('Failed to load customers');
@@ -82,28 +94,37 @@ const CreditManagement = () => {
   const loadOverdueCredits = async () => {
     try {
       const response = await api.get('/customers/overdue/list?days=30');
-      setOverdueCredits(response.data.overdueCredits);
+      setOverdueCredits(response.data?.overdueCredits || []);
     } catch (error) {
-      console.error('Failed to load overdue credits:', error);
-      toast.error('Failed to load overdue credits');
+      console.warn('Overdue credits API not available or failed:', error);
+      setOverdueCredits([]);
     }
   };
 
   const loadCreditSummary = async () => {
     try {
       const response = await api.get('/customers/credit/summary');
-      setCreditSummary(response.data);
+      const summary = response.data || {};
+      setCreditSummary({
+        totalOutstanding: summary.totalOutstanding ?? 0,
+        overdueCredits: summary.overdueCredits ?? 0,
+        monthlyAmount: summary.monthlyAmount ?? 0,
+        monthlyCredits: summary.monthlyCredits ?? 0,
+        recentPayments: summary.recentPayments || [],
+      });
     } catch (error) {
       console.error('Failed to load credit summary:', error);
+      setCreditSummary({ totalOutstanding: 0, overdueCredits: 0 });
     }
   };
 
   const loadAllPayments = async () => {
     try {
       const response = await api.get('/customers/payments/all');
-      setAllPayments(response.data.payments);
+      setAllPayments(response.data?.payments || []);
     } catch (error) {
-      console.error('Failed to load payments:', error);
+      console.warn('Payments list API not available or failed:', error);
+      setAllPayments([]);
     }
   };
 
@@ -111,9 +132,18 @@ const CreditManagement = () => {
     try {
       setLoading(true);
       const response = await api.get(`/customers/${customerId}`);
-      setCustomerSales(response.data.creditSales);
-      setCustomerPayments(response.data.payments);
-      setSelectedCustomer(response.data.customer);
+      const customer = response.data?.customer || response.data?.data || response.data;
+      setSelectedCustomer(normalizeCustomer(customer));
+      // Fetch payments for this customer from Nest endpoint
+      try {
+        const paymentsRes = await api.get(`/customers/${customerId}/payments`);
+        setCustomerPayments(paymentsRes.data?.items || []);
+      } catch (err) {
+        console.warn('Customer payments fetch failed:', err);
+        setCustomerPayments([]);
+      }
+      // Credit sales not implemented in Nest yet; keep empty
+      setCustomerSales([]);
     } catch (error) {
       console.error('Failed to load customer details:', error);
       toast.error('Failed to load customer details');
@@ -130,11 +160,9 @@ const CreditManagement = () => {
 
     try {
       await api.post(`/customers/${selectedCustomer.id}/payments`, {
-        sale_id: selectedCredit.id,
         amount: parseFloat(paymentForm.amount),
-        payment_date: paymentForm.payment_date,
-        payment_method: paymentForm.payment_method,
-        notes: paymentForm.notes
+        date: paymentForm.payment_date,
+        note: paymentForm.notes
       });
       
       toast.success('Payment recorded successfully');
@@ -150,7 +178,7 @@ const CreditManagement = () => {
       });
     } catch (error) {
       console.error('Failed to record payment:', error);
-      toast.error(error.response?.data?.error || 'Failed to record payment');
+      toast.error(error.response?.data?.error || 'Payments API not available');
     }
   };
 

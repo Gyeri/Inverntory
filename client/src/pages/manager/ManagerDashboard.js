@@ -45,27 +45,52 @@ const ManagerDashboard = () => {
     try {
       setLoading(true);
       const [
-        dashboardRes,
-        trendsRes,
+        salesTodayRes,
         productsRes,
-        categoriesRes,
-        hourlyRes,
-        overdueRes
+        usersRes,
+        creditSummaryRes
       ] = await Promise.all([
-        api.get('/analytics/dashboard'),
-        api.get('/analytics/sales-trends?period=7days'),
-        api.get('/analytics/top-products?period=7days&limit=5'),
-        api.get('/analytics/sales-by-category?period=7days'),
-        api.get('/analytics/hourly-pattern?days=7'),
-        api.get('/customers/overdue/alerts?days=30')
+        api.get('/sales/dashboard/today'),
+        api.get('/products?limit=1&page=1'),
+        api.get('/users'),
+        api.get('/customers/credit/summary')
       ]);
 
-      setDashboardData(dashboardRes.data);
-      setSalesTrends(trendsRes.data.trends);
-      setTopProducts(productsRes.data.topProducts);
-      setCategorySales(categoriesRes.data.categorySales);
-      setHourlyPattern(hourlyRes.data.hourlyPattern);
-      setOverdueAlerts(overdueRes.data);
+      const today = {
+        revenue: salesTodayRes.data?.revenue || 0,
+        transactions: salesTodayRes.data?.transactions || 0,
+      };
+
+      const productsSummary = {
+        total: productsRes.data?.total || 0,
+        outOfStock: 0,
+        lowStock: 0,
+      };
+
+      const usersSummary = {
+        activeToday: 0,
+        total: Array.isArray(usersRes.data) ? usersRes.data.length : (usersRes.data?.total || 0),
+      };
+
+      setDashboardData({
+        today,
+        yesterday: { revenue: 0, transactions: 0 },
+        products: productsSummary,
+        users: usersSummary,
+      });
+
+      setSalesTrends([]);
+      setTopProducts([]);
+      setCategorySales([]);
+      setHourlyPattern([]);
+
+      setOverdueAlerts({
+        summary: {
+          overdue_count: creditSummaryRes.data?.overdueCredits || 0,
+          total_overdue_amount: creditSummaryRes.data?.totalOutstanding || 0,
+        },
+        recentOverdue: [],
+      });
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       toast.error('Failed to load dashboard data');

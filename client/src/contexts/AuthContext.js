@@ -1,29 +1,29 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../services/api';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      loadUser();
-    } else {
-      setLoading(false);
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+    delete api.defaults.headers.common['Authorization'];
+  };
+
+  const hasRole = (requiredRole) => {
+    if (!user) return false;
+    if (Array.isArray(requiredRole)) {
+      return requiredRole.includes(user.role);
     }
-  }, [token]);
+    return user.role === requiredRole;
+  };
 
   const loadUser = async () => {
     try {
@@ -40,33 +40,30 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       const response = await api.post('/auth/login', credentials);
-      const { token: newToken, user: userData } = response.data;
-      
+      const { accessToken: newToken, user: userData } = response.data;
+
       localStorage.setItem('token', newToken);
       setToken(newToken);
       setUser(userData);
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-      
+
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Login failed' 
+      return {
+        success: false,
+        error: error.response?.data?.error || error.response?.data?.message || 'Login failed'
       };
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-    delete api.defaults.headers.common['Authorization'];
-  };
-
-  const hasRole = (roles) => {
-    if (!user) return false;
-    return Array.isArray(roles) ? roles.includes(user.role) : user.role === roles;
-  };
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      loadUser();
+    } else {
+      setLoading(false);
+    }
+  }, []);
 
   const isAdmin = () => hasRole('admin');
   const isManager = () => hasRole(['admin', 'manager']);

@@ -6,7 +6,6 @@ import {
   Search, 
   Edit, 
   Trash2, 
-  Eye,
   User,
   Mail,
   Shield,
@@ -20,12 +19,10 @@ const UserManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [userActivity, setUserActivity] = useState([]);
 
   const [formData, setFormData] = useState({
-    username: '',
+    name: '',
     email: '',
-    full_name: '',
     role: 'cashier',
     password: ''
   });
@@ -38,7 +35,7 @@ const UserManagement = () => {
     try {
       setLoading(true);
       const response = await api.get('/users');
-      setUsers(response.data.users);
+      setUsers(response.data);
     } catch (error) {
       console.error('Failed to load users:', error);
       toast.error('Failed to load users');
@@ -47,19 +44,11 @@ const UserManagement = () => {
     }
   };
 
-  const loadUserActivity = async (userId) => {
-    try {
-      const response = await api.get(`/users/${userId}/activity?limit=20`);
-      setUserActivity(response.data.activities);
-    } catch (error) {
-      console.error('Failed to load user activity:', error);
-    }
-  };
+
 
   const filteredUsers = users.filter(user =>
-    user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (user.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (user.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleInputChange = (e) => {
@@ -76,12 +65,19 @@ const UserManagement = () => {
       setLoading(true);
       
       if (selectedUser) {
-        // Update user
-        await api.put(`/users/${selectedUser.id}`, formData);
+        await api.patch(`/users/${selectedUser._id}`, {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+        });
         toast.success('User updated successfully');
       } else {
-        // Create user
-        await api.post('/users', formData);
+        await api.post('/users', {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          password: formData.password,
+        });
         toast.success('User created successfully');
       }
 
@@ -101,9 +97,8 @@ const UserManagement = () => {
   const handleEdit = (user) => {
     setSelectedUser(user);
     setFormData({
-      username: user.username,
+      name: user.name,
       email: user.email,
-      full_name: user.full_name,
       role: user.role,
       password: ''
     });
@@ -111,13 +106,13 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (user) => {
-    if (!window.confirm(`Are you sure you want to delete ${user.full_name}?`)) {
+    if (!window.confirm(`Are you sure you want to delete ${user.name}?`)) {
       return;
     }
 
     try {
       setLoading(true);
-      await api.delete(`/users/${user.id}`);
+      await api.delete(`/users/${user._id}`);
       toast.success('User deleted successfully');
       loadUsers();
     } catch (error) {
@@ -128,16 +123,13 @@ const UserManagement = () => {
     }
   };
 
-  const handleViewActivity = (user) => {
-    setSelectedUser(user);
-    loadUserActivity(user.id);
-  };
+
+
 
   const resetForm = () => {
     setFormData({
-      username: '',
+      name: '',
       email: '',
-      full_name: '',
       role: 'cashier',
       password: ''
     });
@@ -216,7 +208,7 @@ const UserManagement = () => {
             </thead>
             <tbody className="table-body">
               {filteredUsers.map((user) => (
-                <tr key={user.id} className="table-row">
+                <tr key={user._id} className="table-row">
                   <td className="table-cell">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
@@ -225,8 +217,7 @@ const UserManagement = () => {
                         </div>
                       </div>
                       <div className="ml-4">
-                        <div className="font-medium text-gray-900">{user.full_name}</div>
-                        <div className="text-sm text-gray-500">{user.username}</div>
+                        <div className="font-medium text-gray-900">{user.name}</div>
                         <div className="text-sm text-gray-500 flex items-center">
                           <Mail className="h-3 w-3 mr-1" />
                           {user.email}
@@ -241,25 +232,19 @@ const UserManagement = () => {
                     </span>
                   </td>
                   <td className="table-cell">
-                    <span className={`badge ${user.is_active ? 'badge-success' : 'badge-danger'}`}>
-                      {user.is_active ? 'Active' : 'Inactive'}
+                    <span className={`badge badge-success`}>
+                      Active
                     </span>
                   </td>
                   <td className="table-cell">
                     <div className="flex items-center text-sm text-gray-500">
                       <Calendar className="h-4 w-4 mr-1" />
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {new Date(user.createdAt).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="table-cell">
                     <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleViewActivity(user)}
-                        className="text-blue-600 hover:text-blue-800"
-                        title="View Activity"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
+
                       <button
                         onClick={() => handleEdit(user)}
                         className="text-green-600 hover:text-green-800"
@@ -307,13 +292,13 @@ const UserManagement = () => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="label">Username *</label>
+                        <label className="label">Name *</label>
                         <input
                           type="text"
-                          name="username"
+                          name="name"
                           required
                           className="input"
-                          value={formData.username}
+                          value={formData.name}
                           onChange={handleInputChange}
                         />
                       </div>
@@ -328,18 +313,6 @@ const UserManagement = () => {
                           onChange={handleInputChange}
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="label">Full Name *</label>
-                      <input
-                        type="text"
-                        name="full_name"
-                        required
-                        className="input"
-                        value={formData.full_name}
-                        onChange={handleInputChange}
-                      />
                     </div>
 
                     <div>
@@ -372,19 +345,7 @@ const UserManagement = () => {
                       </div>
                     )}
 
-                    {selectedUser && (
-                      <div>
-                        <label className="label">New Password (leave blank to keep current)</label>
-                        <input
-                          type="password"
-                          name="password"
-                          className="input"
-                          value={formData.password}
-                          onChange={handleInputChange}
-                          placeholder="Enter new password"
-                        />
-                      </div>
-                    )}
+
                   </div>
                 </div>
 
@@ -415,58 +376,7 @@ const UserManagement = () => {
         </div>
       )}
 
-      {/* User Activity Modal */}
-      {selectedUser && userActivity.length > 0 && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-            
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Activity Log - {selectedUser.full_name}
-                </h3>
-                
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {userActivity.map((activity, index) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                          <activity className="h-4 w-4 text-blue-600" />
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
-                          {activity.action.replace('_', ' ').toUpperCase()}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {activity.details}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(activity.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setUserActivity([]);
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
