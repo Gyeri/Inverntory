@@ -443,7 +443,7 @@ const CashierDashboard = () => {
       const response = await api.post('/sales', saleData);
 
       // Capture receipt info before resetting UI state
-      const saleResult = response.data;
+      const saleResult = response?.data?.data || response?.data;
       const paymentUsed = paymentMethod;
       const customerInfo = selectedCustomer;
 
@@ -451,6 +451,7 @@ const CashierDashboard = () => {
       toast.success(`${paymentText.charAt(0).toUpperCase() + paymentText.slice(1)} completed successfully!`);
 
       // Show receipt
+      console.debug('Sale response for receipt:', saleResult);
       setReceiptSale(saleResult);
       setReceiptPaymentMethod(paymentUsed);
       setReceiptCustomer(customerInfo);
