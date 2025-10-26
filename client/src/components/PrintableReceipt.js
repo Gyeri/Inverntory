@@ -26,9 +26,8 @@ const PrintableReceipt = ({ sale, paymentMethod = 'cash', customer = null, onClo
         <div className="receipt-print-area p-4">
           {/* Header */}
           <div className="text-center">
-            <h2 className="text-xl font-bold">Supermarket POS</h2>
-            <p className="text-xs text-gray-600">123 Market Street, City</p>
-            <p className="text-xs text-gray-600">Tel: +234 800 000 0000</p>
+            <h2 className="text-xl font-bold">DanAlhaji Supermarket</h2>
+            <p className="text-xs text-gray-600">POS Receipt</p>
           </div>
 
           <div className="mt-2 text-xs">
