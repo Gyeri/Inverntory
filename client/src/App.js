@@ -18,6 +18,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import InventoryManagement from './pages/manager/InventoryManagement';
 import SalesReports from './pages/manager/SalesReports';
 import Analytics from './pages/manager/Analytics';
+import SalesHistory from './pages/manager/SalesHistory';
 
 // Admin Pages
 import UserManagement from './pages/admin/UserManagement';
@@ -108,6 +109,11 @@ function AppContent() {
             <Route path="manager/sales" element={
               <ProtectedRoute requiredRole={['admin', 'manager']}>
                 <SalesReports />
+              </ProtectedRoute>
+            } />
+            <Route path="manager/sales-history" element={
+              <ProtectedRoute requiredRole={['admin', 'manager']}>
+                <SalesHistory />
               </ProtectedRoute>
             } />
             <Route path="manager/analytics" element={

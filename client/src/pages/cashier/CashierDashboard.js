@@ -17,7 +17,8 @@ import {
   Camera,
   Scan,
   ShoppingBag,
-  Edit3
+  Edit3,
+  Receipt
 } from 'lucide-react';
 import { format } from 'date-fns';
 import PrintableReceipt from '../../components/PrintableReceipt';
@@ -472,6 +473,30 @@ const CashierDashboard = () => {
     } catch (error) {
       console.error('Sale failed:', error);
       toast.error(error.response?.data?.error || 'Failed to process sale');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open receipt modal for a past sale by ID
+  const openReceiptForSaleId = async (saleId) => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/sales/${saleId}`);
+      const saleDoc = res?.data?.data || res?.data;
+      if (!saleDoc) {
+        toast.error('Sale not found');
+        return;
+      }
+      setReceiptSale(saleDoc);
+      // Payment method isn’t stored in sale; default to cash for historic prints
+      setReceiptPaymentMethod('cash');
+      setReceiptCustomer(null);
+      setShowReceipt(true);
+    } catch (error) {
+      console.error('Failed to fetch sale:', error);
+      const msg = error.response?.data?.error || 'Failed to open receipt';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -1084,6 +1109,17 @@ const CashierDashboard = () => {
               </h3>
             </div>
             <div className="card-body">
+              {recentSales.length > 0 && (
+                <div className="mb-3">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => openReceiptForSaleId(recentSales[0].id)}
+                    title="Print last sale"
+                  >
+                    <span className="flex items-center"><Receipt className="h-4 w-4 mr-1" /> Print Last Sale</span>
+                  </button>
+                </div>
+              )}
               {recentSales.length === 0 ? (
                 <p className="text-gray-500 text-sm">No recent sales</p>
               ) : (
@@ -1096,7 +1132,17 @@ const CashierDashboard = () => {
                           {format(new Date(sale.created_at), 'HH:mm')} • {sale.item_count} items
                         </p>
                       </div>
-                      <span className="font-medium">₦{sale.total_amount.toFixed(2)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">₦{sale.total_amount.toFixed(2)}</span>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => openReceiptForSaleId(sale.id)}
+                          title="Open receipt"
+                        >
+                          <Receipt className="h-4 w-4 mr-1" />
+                          Print
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
