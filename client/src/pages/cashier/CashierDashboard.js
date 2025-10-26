@@ -770,7 +770,7 @@ const CashierDashboard = () => {
           {/* Product Search */}
           <div className="card">
             <div className="card-header">
-              <h3 className="text-lg font-medium text-gray-900">Product Search 1</h3>
+              <h3 className="text-lg font-medium text-gray-900">Product Search</h3>
             </div>
             <div className="card-body">
               <div className="flex gap-2">
