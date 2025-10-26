@@ -265,9 +265,35 @@ const CashierDashboard = () => {
 
     try {
       setLoading(true);
-      const response = await api.get(`/products?search=${encodeURIComponent(query)}&limit=10`);
-      const list = Array.isArray(response.data?.data) ? response.data.data : (response.data?.products || []);
-      setProducts(list.map(normalizeProduct));
+      const results = [];
+
+      // Primary: backend search (name, and if backend updated, SKU+barcode)
+      try {
+        const response = await api.get(`/products?search=${encodeURIComponent(query)}&limit=10`);
+        const list = Array.isArray(response.data?.data) ? response.data.data : (response.data?.products || []);
+        results.push(...list.map(normalizeProduct));
+      } catch (err) {
+        console.error('Primary search failed:', err);
+      }
+
+      // Fallback: if query looks like a barcode (digits, 8-14 chars), try direct barcode endpoint
+      const looksLikeBarcode = /^\d{8,14}$/.test(query.trim());
+      if (looksLikeBarcode) {
+        try {
+          const res = await api.get(`/products/barcode/${encodeURIComponent(query.trim())}`);
+          const p = normalizeProduct(res?.data?.product || res?.data);
+          if (p && !results.find(r => r.id === p.id)) {
+            results.push(p);
+          }
+        } catch (err) {
+          // Ignore 404, log others
+          if (err?.response?.status !== 404) {
+            console.debug('Barcode lookup error:', err);
+          }
+        }
+      }
+
+      setProducts(results);
     } catch (error) {
       console.error('Search failed:', error);
       toast.error('Failed to search products');
@@ -744,7 +770,7 @@ const CashierDashboard = () => {
           {/* Product Search */}
           <div className="card">
             <div className="card-header">
-              <h3 className="text-lg font-medium text-gray-900">Product Search</h3>
+              <h3 className="text-lg font-medium text-gray-900">Product Search 1</h3>
             </div>
             <div className="card-body">
               <div className="flex gap-2">
