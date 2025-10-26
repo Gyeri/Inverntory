@@ -20,6 +20,7 @@ import {
   Edit3
 } from 'lucide-react';
 import { format } from 'date-fns';
+import PrintableReceipt from '../../components/PrintableReceipt';
 
 // Customer Creation Modal Component
 const CustomerCreationModal = ({ onClose, onCreate }) => {
@@ -203,6 +204,12 @@ const CashierDashboard = () => {
   const [creditDueDate, setCreditDueDate] = useState('');
   const [overdueCount, setOverdueCount] = useState(0);
   const [totalOutstanding, setTotalOutstanding] = useState(0);
+
+  // Receipt modal state
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptSale, setReceiptSale] = useState(null);
+  const [receiptPaymentMethod, setReceiptPaymentMethod] = useState('cash');
+  const [receiptCustomer, setReceiptCustomer] = useState(null);
 
   // Normalize product shape from backend
   const normalizeProduct = (p) => ({
@@ -435,8 +442,19 @@ const CashierDashboard = () => {
 
       const response = await api.post('/sales', saleData);
 
-      const paymentText = paymentMethod === 'credit' ? 'credit sale' : 'sale';
+      // Capture receipt info before resetting UI state
+      const saleResult = response.data;
+      const paymentUsed = paymentMethod;
+      const customerInfo = selectedCustomer;
+
+      const paymentText = paymentUsed === 'credit' ? 'credit sale' : 'sale';
       toast.success(`${paymentText.charAt(0).toUpperCase() + paymentText.slice(1)} completed successfully!`);
+
+      // Show receipt
+      setReceiptSale(saleResult);
+      setReceiptPaymentMethod(paymentUsed);
+      setReceiptCustomer(customerInfo);
+      setShowReceipt(true);
       
       // Reset form
       updateCartItems([]);
@@ -1247,6 +1265,16 @@ const CashierDashboard = () => {
         <CustomerCreationModal
           onClose={() => setShowCustomerModal(false)}
           onCreate={createNewCustomer}
+        />
+      )}
+
+      {/* Receipt Modal */}
+      {showReceipt && receiptSale && (
+        <PrintableReceipt
+          sale={receiptSale}
+          paymentMethod={receiptPaymentMethod}
+          customer={receiptCustomer}
+          onClose={() => setShowReceipt(false)}
         />
       )}
     </div>

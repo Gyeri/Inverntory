@@ -180,3 +180,33 @@
     transform: translateY(0);
   }
 }
+
+/* Print styles for POS receipt */
+@media print {
+  /* Hide everything except the receipt area */
+  body * {
+    visibility: hidden;
+  }
+  .receipt-print-area, .receipt-print-area * {
+    visibility: visible;
+  }
+  .receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm; /* Typical thermal printer width */
+    padding: 0;
+    margin: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+
+  /* Page setup for thermal receipt */
+  @page {
+    size: 80mm auto;
+    margin: 5mm;
+  }
+}
