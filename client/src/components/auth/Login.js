@@ -53,8 +53,8 @@ const Login = () => {
           <div className="mx-auto h-16 w-16 bg-primary-600 rounded-full flex items-center justify-center">
             <ShoppingCart className="h-8 w-8 text-white" />
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Inventory Management
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">Welcome To <br></br>Dan-Alhaji
+            Inventory Management System.
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Sign in to your account
