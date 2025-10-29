@@ -8,8 +8,12 @@ import {
 } from 'recharts';
 import {
   Calendar, Filter, Download, TrendingUp, Package, Users,
-  DollarSign, ShoppingCart, Clock, Award, BarChart2, PieChart as PieChartIcon
+  DollarSign, ShoppingCart, Clock, Award, BarChart2, PieChart as PieChartIcon, Loader
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const Analytics = () => {
   // State for filters
@@ -18,6 +22,8 @@ const Analytics = () => {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  
   
   // Sample data (will be replaced with API data)
   const [salesData, setSalesData] = useState([
@@ -81,6 +87,222 @@ const Analytics = () => {
     } catch (error) {
       toast.error('Failed to load analytics data');
       setIsLoading(false);
+    }
+  };
+  
+  // Generate PDF report
+  const exportToPDF = async () => {
+    try {
+      setIsExporting(true);
+      toast.loading('Generating PDF report...');
+      
+      // Create a new PDF document
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const timestamp = new Date().toLocaleString();
+      
+      // Add company branding
+      doc.setFontSize(20);
+      doc.setTextColor(0, 0, 128);
+      doc.text('Inventory Management System', pageWidth / 2, 15, { align: 'center' });
+      
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Analytics Report', pageWidth / 2, 25, { align: 'center' });
+      
+      // Add report metadata
+      doc.setFontSize(10);
+      doc.text(`Date Range: ${startDate} to ${endDate}`, 14, 35);
+      doc.text(`Category: ${category === 'all' ? 'All Categories' : category}`, 14, 40);
+      doc.text(`Generated: ${timestamp}`, 14, 45);
+      
+      // Sales Data Table
+      doc.setFontSize(12);
+      doc.text('Sales Performance', 14, 55);
+      
+      autoTable(doc, {
+        startY: 60,
+        head: [['Date', 'Sales Amount', 'Profit', 'Category']],
+        body: salesData.map(item => [
+          item.date,
+          formatCurrency(item.sales),
+          formatCurrency(item.profit),
+          item.category
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [0, 51, 102] }
+      });
+      
+      // Product Data Table
+      const productTableY = doc.lastAutoTable.finalY + 15;
+      doc.text('Top Products', 14, productTableY);
+      
+      autoTable(doc, {
+        startY: productTableY + 5,
+        head: [['Product Name', 'Revenue', 'Quantity Sold', 'Category']],
+        body: productData.map(item => [
+          item.name,
+          formatCurrency(item.value),
+          item.quantity,
+          item.category
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [0, 51, 102] }
+      });
+      
+      // Staff Performance Table
+      const staffTableY = doc.lastAutoTable.finalY + 15;
+      doc.text('Staff Performance', 14, staffTableY);
+      
+      autoTable(doc, {
+        startY: staffTableY + 5,
+        head: [['Staff Name', 'Total Sales', 'Transactions', 'Avg. Processing Time']],
+        body: staffData.map(item => [
+          item.name,
+          formatCurrency(item.sales),
+          item.transactions,
+          `${item.avgTime} min`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [0, 51, 102] }
+      });
+      
+      // Customer Segments Table
+      const customerTableY = doc.lastAutoTable.finalY + 15;
+      doc.text('Customer Segments', 14, customerTableY);
+      
+      autoTable(doc, {
+        startY: customerTableY + 5,
+        head: [['Segment', 'Percentage', 'Count']],
+        body: customerData.map(item => [
+          item.name,
+          `${item.value}%`,
+          item.count
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [0, 51, 102] }
+      });
+      
+      // Add footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount} | Inventory Management System | Confidential`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+      
+      // Save the PDF
+      const fileName = `Analytics_Report_${startDate}_to_${endDate}_${new Date().getTime()}.pdf`;
+      doc.save(fileName);
+      
+      toast.dismiss();
+      toast.success('PDF report generated successfully');
+      setIsExporting(false);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.dismiss();
+      toast.error('Failed to generate PDF report');
+      setIsExporting(false);
+    }
+  };
+  
+  // Generate Excel report
+  const exportToExcel = async () => {
+    try {
+      setIsExporting(true);
+      toast.loading('Generating Excel report...');
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Add metadata worksheet
+      const metaData = [
+        ['Inventory Management System - Analytics Report'],
+        [''],
+        ['Report Parameters'],
+        ['Date Range', `${startDate} to ${endDate}`],
+        ['Category', category === 'all' ? 'All Categories' : category],
+        ['Generated', new Date().toLocaleString()],
+        ['']
+      ];
+      const metaSheet = XLSX.utils.aoa_to_sheet(metaData);
+      XLSX.utils.book_append_sheet(wb, metaSheet, 'Report Info');
+      
+      // Format sales data for Excel
+      const salesSheetData = [
+        ['Date', 'Sales Amount', 'Profit', 'Category']
+      ];
+      salesData.forEach(item => {
+        salesSheetData.push([
+          item.date,
+          item.sales,
+          item.profit,
+          item.category
+        ]);
+      });
+      const salesSheet = XLSX.utils.aoa_to_sheet(salesSheetData);
+      XLSX.utils.book_append_sheet(wb, salesSheet, 'Sales Data');
+      
+      // Format product data for Excel
+      const productSheetData = [
+        ['Product Name', 'Revenue', 'Quantity Sold', 'Category']
+      ];
+      productData.forEach(item => {
+        productSheetData.push([
+          item.name,
+          item.value,
+          item.quantity,
+          item.category
+        ]);
+      });
+      const productSheet = XLSX.utils.aoa_to_sheet(productSheetData);
+      XLSX.utils.book_append_sheet(wb, productSheet, 'Product Performance');
+      
+      // Format staff data for Excel
+      const staffSheetData = [
+        ['Staff Name', 'Total Sales', 'Transactions', 'Avg. Processing Time (min)']
+      ];
+      staffData.forEach(item => {
+        staffSheetData.push([
+          item.name,
+          item.sales,
+          item.transactions,
+          item.avgTime
+        ]);
+      });
+      const staffSheet = XLSX.utils.aoa_to_sheet(staffSheetData);
+      XLSX.utils.book_append_sheet(wb, staffSheet, 'Staff Performance');
+      
+      // Format customer data for Excel
+      const customerSheetData = [
+        ['Segment', 'Percentage', 'Count']
+      ];
+      customerData.forEach(item => {
+        customerSheetData.push([
+          item.name,
+          item.value,
+          item.count
+        ]);
+      });
+      const customerSheet = XLSX.utils.aoa_to_sheet(customerSheetData);
+      XLSX.utils.book_append_sheet(wb, customerSheet, 'Customer Segments');
+      
+      // Generate Excel file
+      const fileName = `Analytics_Report_${startDate}_to_${endDate}_${new Date().getTime()}.xlsx`;
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      
+      // Save the file
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      saveAs(blob, fileName);
+      
+      toast.dismiss();
+      toast.success('Excel report generated successfully');
+      setIsExporting(false);
+    } catch (error) {
+      console.error('Error generating Excel:', error);
+      toast.dismiss();
+      toast.error('Failed to generate Excel report');
+      setIsExporting(false);
     }
   };
   
@@ -506,18 +728,26 @@ const Analytics = () => {
         </div>
         <div className="p-6">
           <div className="flex space-x-4">
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-              <Download className="h-4 w-4 mr-2" />
+            <button 
+              onClick={exportToPDF}
+              disabled={isExporting}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isExporting ? <Loader className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Export as PDF
             </button>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-              <Download className="h-4 w-4 mr-2" />
+            <button 
+              onClick={exportToExcel}
+              disabled={isExporting}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isExporting ? <Loader className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Export as Excel
             </button>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            {/* <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               <Download className="h-4 w-4 mr-2" />
               Export as CSV
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
