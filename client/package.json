@@ -5,14 +5,19 @@
   "dependencies": {
     "axios": "^1.6.2",
     "date-fns": "^2.30.0",
+    "file-saver": "^2.0.5",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.294.0",
-    "quagga": "^0.12.1",
+    "quagga": "^0.6.16",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-query": "^3.39.3",
     "react-router-dom": "^6.8.1",
-    "recharts": "^2.8.0"
+    "react-toastify": "^11.0.5",
+    "recharts": "^2.8.0",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -20,7 +25,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-
+  
   "browserslist": {
     "production": [
       ">0.2%",
@@ -35,8 +40,11 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-react": "^7.33.2",
     "postcss": "^8.4.32",
-    "react-scripts": "^5.0.1",
+    "react-scripts": "^0.0.0",
     "tailwindcss": "^3.3.6"
   },
   "proxy": "http://localhost:5000"

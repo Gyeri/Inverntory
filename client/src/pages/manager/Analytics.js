@@ -92,7 +92,7 @@ const Analytics = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -101,8 +101,8 @@ const Analytics = () => {
         </div>
         
         {/* Filter options */}
-        <div className="flex space-x-4">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap gap-4 mt-4">
+          <div className="flex items-center space-x-2"> 
             <label className="text-sm font-medium text-gray-700">Time Range:</label>
             <select 
               className="form-select rounded-md border-gray-300 shadow-sm"
@@ -121,7 +121,7 @@ const Analytics = () => {
             <div className="relative">
               <input
                 type="date"
-                className="form-input rounded-md border-gray-300 shadow-sm pl-8"
+                className="form-input rounded-md border-gray-300 shadow-sm pl-8 w-full"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -134,7 +134,7 @@ const Analytics = () => {
             <div className="relative">
               <input
                 type="date"
-                className="form-input rounded-md border-gray-300 shadow-sm pl-8"
+                className="form-input rounded-md border-gray-300 shadow-sm pl-8 w-full"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
